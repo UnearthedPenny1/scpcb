@@ -186,7 +186,7 @@ Global MenuScale# = (GraphicHeight / 1024.0)
 
 SetBuffer(BackBuffer())
 
-Global CurTime%, PrevTime%, LoopDelay%, FPSfactor#, FPSfactor2#
+Global CurTime%, PrevTime%, LoopDelay%, FPSfactor#, FPSfactor2#, PrevFPSFactor#
 Local CheckFPS%, ElapsedLoops%, FPS%, ElapsedTime#
 
 Global Framelimit% = GetINIInt(OptionFile, "options", "framelimit")
@@ -2808,12 +2808,12 @@ Global I_Zone.MapZones = New MapZones
 ;----------------------------------------------------------------------------------------------------------------------------------------------------
 
 Repeat
-	
 	Cls
 	
 	CurTime = MilliSecs2()
 	ElapsedTime = (CurTime - PrevTime) / 1000.0
 	PrevTime = CurTime
+	PrevFPSFactor = FPSfactor
 	FPSfactor = Max(Min(ElapsedTime * 70, 5.0), 0.2)
 	FPSfactor2 = FPSfactor
 	
@@ -4402,6 +4402,16 @@ Function MouseLook()
 		Local mouse_x_acc#=(MouseXSpeed()*(MouseSens+0.5)*mouselook_x_inc / (1.0+WearingVest))
 		Local mouse_y_acc#=(MouseYSpeed()*(MouseSens+0.5)*mouselook_y_inc / (1.0+WearingVest))
 		
+		If PrevFPSFactor>0 Then
+			If Abs(FPSFactor/PrevFPSFactor-1.0)>1.0 Then
+				;lag spike detected - stop all camera movement
+				mouse_x_speed_1 = 0.0
+				mouse_y_speed_1 = 0.0
+				mouse_x_acc = 0.0
+				mouse_y_acc = 0.0
+			EndIf
+		EndIf
+		
 		If mouse_smooth Then
 			mouse_x_speed_1=mouse_x_speed_1-mouse_x_acc
 			mouse_y_speed_1=mouse_y_speed_1+mouse_y_acc
@@ -4409,12 +4419,14 @@ Function MouseLook()
 			RotateEntity Collider,0.0,EntityYaw(Collider)-mouse_x_acc,0.0
 			user_camera_pitch#=user_camera_pitch#+mouse_y_acc
 		EndIf
+		
 		Local oldYaw# = EntityYaw(Collider)
-		RotateEntity Collider, 0.0, CurveAngle(EntityYaw(Collider) + mouse_x_speed_1,EntityYaw(Collider),12.0), 0.0 ; Turn the user on the Y (yaw) axis.
-		mouse_x_speed_1=mouse_x_speed_1-WrapAngle180(EntityYaw(Collider)-oldYaw)
+		Local newYaw# = CurveValue(EntityYaw(Collider) + mouse_x_speed_1,EntityYaw(Collider),7.0)
+		RotateEntity Collider, 0.0, WrapAngle(newYaw), 0.0 ; Turn the user on the Y (yaw) axis.
+		mouse_x_speed_1=mouse_x_speed_1-(newYaw-oldYaw)
 		Local oldPitch# = user_camera_pitch
-		user_camera_pitch# = CurveValue(user_camera_pitch + mouse_y_speed_1,user_camera_pitch,12.0)
-		mouse_y_speed_1=mouse_y_speed_1-WrapAngle180(user_camera_pitch-oldPitch)
+		user_camera_pitch# = CurveValue(user_camera_pitch + mouse_y_speed_1,user_camera_pitch,7.0)
+		mouse_y_speed_1=mouse_y_speed_1-(user_camera_pitch-oldPitch)
 		
 		mouse_x_leverTurn=CurveValue(0.0,mouse_x_leverTurn,8.0)+mouse_x_acc
 		mouse_y_leverTurn=CurveValue(0.0,mouse_y_leverTurn,8.0)+mouse_y_acc
@@ -11263,6 +11275,11 @@ End Function
 
 Function Graphics3DExt%(width%,height%,depth%=32,mode%=2)
 	;If FE_InitExtFlag = 1 Then DeInitExt() ;prevent FastExt from breaking itself
+	
+	mouse_left_limit% = width/2-125 : mouse_right_limit% = width/2+125
+	mouse_top_limit% = height/2-125 : mouse_bottom_limit% = height/2+125
+	viewport_center_x = width/2 : viewport_center_y = height/2
+	
 	Graphics3D width,height,depth,mode
 	InitFastResize()
 	;InitExt()
@@ -12087,6 +12104,5 @@ End Function
 
 
 ;~IDEal Editor Parameters:
-;~F#39
-;~B#11E8#1468#1C0A
+;~B#11F5#1475#1C17
 ;~C#Blitz3D
